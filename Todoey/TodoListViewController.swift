@@ -11,9 +11,13 @@ import UIKit
 class TodoListViewController: UITableViewController {
 	
 	var itemsArray = ["Call Tatiana","Call Mom","Walk the dog"]
+	let userDefaults = UserDefaults.standard
 	
 	override func viewDidLoad() {
 		super.viewDidLoad()
+		if let items = userDefaults.array(forKey: "TodoListArray") as? [String] {
+			itemsArray = items
+		}
 	}
 	
 	override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -47,7 +51,9 @@ class TodoListViewController: UITableViewController {
 		// the closure in below action happens when the user tap "Add item" button
 		let action = UIAlertAction(title: "Add Item", style: .default) {
 			(action) in
+			
 			self.itemsArray.append(alertSuperTextField.text!)
+			self.userDefaults.set(self.itemsArray, forKey: "TodoListArray")
 			self.tableView.reloadData()
 		}
 		alert.addTextField { (alertTextField) in
