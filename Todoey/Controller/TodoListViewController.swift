@@ -88,6 +88,7 @@ class TodoListViewController: UITableViewController {
 		}
 		tableView.reloadData()
 	}
+	
 	func loadData() {
 		if let data = try? Data(contentsOf: dataFilePath!) {
 			let decoder = PropertyListDecoder()
