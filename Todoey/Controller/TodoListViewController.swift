@@ -8,17 +8,15 @@
 
 import UIKit
 import CoreData
+import RealmSwift
 
 class TodoListViewController: UITableViewController {
 	
 	@IBOutlet weak var searchBarOutlet: UISearchBar!
 	
-	var itemsArray = [Item]()
-	let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
-	let userDefaults = UserDefaults.standard
-	
-	let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
-	
+	var todoItems: Results<Item>?
+	let realm = try! Realm()
+
 	var selectedCategory: Category? {
 		didSet {
 			loadData()
@@ -28,41 +26,39 @@ class TodoListViewController: UITableViewController {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		
-//		if let items = userDefaults.array(forKey: "TodoListArray") as? [Item] {
-//			itemsArray = items
-//		}
 	}
 	
 	override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 		let cell = tableView.dequeueReusableCell(withIdentifier: "todoItemCell", for: indexPath)
 		
-		cell.textLabel?.text = itemsArray[indexPath.row].title
-		
-		cell.accessoryType = itemsArray[indexPath.row].done ? .checkmark : .none
+		if let item = todoItems?[indexPath.row] {
+			cell.textLabel?.text = item.title
+			cell.accessoryType = item.done ? .checkmark : .none
+		} else {
+			cell.textLabel?.text = "No items added yet"
+		}
 		
 		return cell
 	}
 	override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-		return itemsArray.count
+		return todoItems?.count ?? 1
 	}
 	
 	// getting the row that had been selected
 	override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-		// print text of the selected row
-		//print(tableView.cellForRow(at: indexPath)?.textLabel?.text)
-		// or
-		//print(itemsArray[indexPath.row])
 		
-		// below method performs an update on the selected row in this case sets the done flag to true
-		itemsArray[indexPath.row].done = !itemsArray[indexPath.row].done
-		
-		// Deleting data from the persistent container it always has to be followed by a context.save
-		// the order is very important
-		//context.delete(itemsArray[indexPath.row])
-		//itemsArray.remove(at: indexPath.row)
-		
-		saveData()
-		
+		if let item = todoItems?[indexPath.row] {
+			do {
+				try realm.write {
+					// To delete
+					//realm.delete(item)
+					item.done = !item.done
+				}
+			} catch {
+				print("Error saving done status \(error)")
+			}
+		}
+		tableView.reloadData()
 		tableView.deselectRow(at: indexPath, animated: true)
 	}
 	
@@ -74,16 +70,19 @@ class TodoListViewController: UITableViewController {
 		// the closure in below action happens when the user tap "Add item" button
 		let action = UIAlertAction(title: "Add Item", style: .default) {
 			(action) in
-			
-			
-			let newItem = Item(context: self.context)
-			newItem.title = alertSuperTextField.text!
-			newItem.done = false
-			newItem.parentCategory = self.selectedCategory
-			
-			self.itemsArray.append(newItem)
-			self.saveData()
-			
+			if let currentCategory = self.selectedCategory {
+				do {
+					try self.realm.write {
+						let newItem = Item()
+						newItem.title = alertSuperTextField.text!
+						newItem.createdDate = Date()
+						currentCategory.items.append(newItem)
+					}
+				} catch {
+					print("Error saving new items, \(error)")
+				}
+			}
+			self.tableView.reloadData()
 			
 		}
 		alert.addTextField { (alertTextField) in
@@ -94,33 +93,9 @@ class TodoListViewController: UITableViewController {
 		present(alert, animated: true, completion: nil)
 	}
 	
-	func saveData() {
-		do {
-			try self.context.save()
-		} catch {
-			print("Error saving context \(error)")
-		}
-		tableView.reloadData()
-	}
-	
 	// This modified function allows to call it without any parameter as there is one assigned by default
-	func loadData(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil) {
-		// be sure to always specify the data type of the request
-		
-		// TODO: Fix when there is no parentCategory.name value
-		let categoryPredicate = NSPredicate(format: "parentCaterogy.name MATCHES %@", selectedCategory!.name!)
-		
-		if let additionalPredicate = predicate {
-			request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [additionalPredicate, categoryPredicate])
-		} else {
-			request.predicate = categoryPredicate
-		}
-
-		do {
-			itemsArray = try context.fetch(request)
-		} catch {
-			print("Error fetching data from container \(error)")
-		}
+	func loadData() {
+		todoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
 		tableView.reloadData()
 	}
 	
@@ -129,24 +104,21 @@ class TodoListViewController: UITableViewController {
 extension TodoListViewController: UISearchBarDelegate {
 	func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
 		
-		let request: NSFetchRequest<Item> = Item.fetchRequest()
+		todoItems = todoItems?.filter("title CONTAINS[cd] %@", searchBar.text!).sorted(byKeyPath: "createdDate", ascending: true)
 		
-		let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-		request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
-		
-		loadData(with: request, predicate: predicate)
-		
+		tableView.reloadData()
+
 	}
 	// Reload the data when there is no text to search for or tapping on the X
 	func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
 		if searchBar.text?.count == 0 {
 			loadData()
-			
+
 			// Below method performs the resigning method in the main thread so the keyboard goes away immediately
 			DispatchQueue.main.async {
 				searchBar.resignFirstResponder()
 			}
-			
+
 		}
 	}
 }
