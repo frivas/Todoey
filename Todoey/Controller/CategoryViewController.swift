@@ -9,8 +9,9 @@
 import UIKit
 import CoreData
 import RealmSwift
+import ChameleonFramework
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController {
 	
 	let realm = try! Realm()
 	
@@ -19,14 +20,22 @@ class CategoryViewController: UITableViewController {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		loadData()
+		tableView.separatorStyle = .none
 	}
 	
 	//MARK: - TableView DataSource Methods
 	// Display categories
 	override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-		let cell = tableView.dequeueReusableCell(withIdentifier: "categoryCell", for: indexPath)
 		
-		cell.textLabel?.text = categories?[indexPath.row].name ?? "No Categories added yet"
+		// INherit from SwipreTableViewController class. This method only add morei information to the cell
+		let cell = super.tableView(tableView, cellForRowAt: indexPath)
+		
+		if let cat = categories?[indexPath.row] {
+			cell.textLabel?.text = cat.name
+			cell.textLabel?.textColor = ContrastColorOf(UIColor(hexString: (cat.color))!, returnFlat: true)
+			cell.backgroundColor = UIColor(hexString: (cat.color))
+		}
+		
 		
 		return cell
 	}
@@ -54,11 +63,24 @@ class CategoryViewController: UITableViewController {
 		tableView.reloadData()
 	}
 	
+	//MARK: - Delete data
+	override func updateModel(at indexPath: IndexPath) {
+		if let itemToDelete = self.categories?[indexPath.row] {
+			do {
+				try self.realm.write {
+					self.realm.delete(itemToDelete)
+				}
+			} catch {
+				print("Error saving context \(error)")
+			}
+		}
+	}
+	
 	// Add new category
 	@IBAction func categoryButtonPressed(_ sender: Any) {
 		
 		var alertSuperTextField = UITextField()
-		
+		let randomColor = UIColor.randomFlat.hexValue()
 		let alert = UIAlertController(title: "Add a new category", message: "", preferredStyle: .alert)
 		
 		let action = UIAlertAction(title: "Add Category", style: .default) {
@@ -66,6 +88,7 @@ class CategoryViewController: UITableViewController {
 			
 			let newCategory = Category()
 			newCategory.name = alertSuperTextField.text!
+			newCategory.color = randomColor
 			self.save(category: newCategory)
 		}
 		
